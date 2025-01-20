@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import OrderResponse from '../models/index.js';
+import AppError from '../utils/appError.js';
 class OrderManagement {
   constructor(config = {}) {
     this.ordersQueue = [];
@@ -59,26 +60,27 @@ class OrderManagement {
   }
 
   onDataOrder(req) {
-    if (!req.organization) {
-      console.log(`Order rejected:  fields.`);
-      return { status: 'rejected', reason: 'Missing required fields' };
-    }
-
     if (!req.qty || !req.price || !req.organization) {
       console.log(`Order rejected: Missing required fields.`);
-      return { status: 'rejected', reason: 'Missing required fields' };
+      return new AppError(
+        `Missing fields, Provide all this : qty, price, organization`,
+        400
+      );
     }
 
     if (req.orderId && !req.orderType && this.ordersMap.has(req.orderId)) {
       console.log(`Order rejected: Duplicate order.`);
-      return { status: 'rejected', reason: 'Duplicate order' };
+      return new AppError('Duplicate order', 400);
     }
 
     req.orderType = req.orderType || 'New';
 
     if (req.orderType != 'New' && req.orderId == null) {
       console.log(`Order rejected: Missing required fields.`);
-      return { status: 'rejected', reason: 'Missing required fields' };
+      return new AppError(
+        'orderId not provided for orderType other than New',
+        400
+      );
     } else {
       const orderId = req.orderId || uuidv4();
       req.orderId = orderId;
@@ -93,7 +95,7 @@ class OrderManagement {
       case 'Modify':
         if (!this.ordersMap.has(req.orderId)) {
           console.log(`Order ${req.orderId} not found.`);
-          return { status: 'rejected', reason: 'Order not found' };
+          return new AppError('Order not found', 400);
         }
         this.ordersMap[req.orderId] = req;
         break;
@@ -101,17 +103,17 @@ class OrderManagement {
       case 'Cancel':
         if (!this.ordersMap.has(req.orderId)) {
           console.log(`Order ${req.orderId} not found.`);
-          return { status: 'rejected', reason: 'Order not found' };
+          return new AppError('Order not found', 400);
         }
         this.ordersMap.delete(req.orderId);
         break;
 
       default:
-        console.log(`Unknown req type for order ${req.orderId}`);
+        console.log(`Order rejected: Unknown order type.`);
+        return new AppError('Unknown order type', 400);
     }
 
     console.log(`Order ${req.orderId} queued.`, this.ordersQueue);
-    console.log(`Orders Map:`, this.ordersMap);
 
     return { status: 'queued', orderId: req.orderId };
   }
@@ -133,6 +135,7 @@ class OrderManagement {
       this.sentOrders.delete(response.orderId);
     } else {
       console.log(`Unknown response for order ${response.orderId}`);
+      return new AppError('Unknown response', 400);
     }
   }
 
