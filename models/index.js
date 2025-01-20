@@ -6,7 +6,8 @@ const orderResponseSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  response: {
+
+  resposeType: {
     type: String,
     required: true,
   },

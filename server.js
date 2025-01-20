@@ -1,16 +1,11 @@
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-dotenv.config();
-
 process.on('uncaughtException', (err) => {
   console.log('UnCaught Exception. Shutting down....');
   console.log(err.name, '. ', err.message, ' : ', err);
   process.exit(1);
 });
 
-import app from './app.js';
-
-console.log(process.env.DATABASE);
+import './app.js';
 
 mongoose
   .connect(process.env.DATABASE)
@@ -20,11 +15,6 @@ mongoose
   .catch((err) => {
     console.log(err);
   });
-
-const port = process.env.PORT || 3000;
-const server = app.listen(port, () => {
-  console.log(`App runnning on port ${process.env.PORT}...`);
-});
 
 process.on('unhandledRejection', (err) => {
   console.log(err.name, '. ', err.message);

@@ -25,7 +25,7 @@ const handleExchangeResponse = catchAsync(async (req, res) => {
       message: result.message,
     });
   } else {
-    res.status(200).json(result);
+    res.status(201).json(result);
   }
 });
 

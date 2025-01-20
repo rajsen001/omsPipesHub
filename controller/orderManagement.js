@@ -128,11 +128,13 @@ class OrderManagement {
 
       await OrderResponse.create({
         orderId: response.orderId,
-        response: response.type,
+        responseType: response.type,
         roundTripLatency: 3,
       });
 
       this.sentOrders.delete(response.orderId);
+
+      return { status: 'success', orderId: response.orderId };
     } else {
       console.log(`Unknown response for order ${response.orderId}`);
       return new AppError('Unknown response', 400);

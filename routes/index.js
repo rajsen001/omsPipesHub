@@ -9,7 +9,7 @@ const router = express.Router();
 router.get('/', (req, res) => {
   res.status(200).json({
     status: 'success',
-    message: 'Hello World!',
+    message: 'Hello World, From OMS API',
   });
 });
 
