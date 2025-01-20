@@ -8,7 +8,7 @@ let mongoServer;
 
 beforeAll(async () => {
   mongoServer = new MongoMemoryServer();
-  await mongoServer.start(); // Start the server explicitly
+  await mongoServer.start();
 
   const mongoUri = await mongoServer.getUri();
 
@@ -34,6 +34,7 @@ describe('OMS API', () => {
         qty: '34',
         price: '700',
         organization: 'mrf',
+        action: 'buy',
       });
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty('status', 'queued');
