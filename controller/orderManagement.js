@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import OrderResponse from '../models/index.js';
 class OrderManagement {
   constructor(config = {}) {
     this.ordersQueue = [];
@@ -58,12 +59,12 @@ class OrderManagement {
   }
 
   onDataOrder(req) {
-    if (!this.isTradingPeriod) {
-      console.log(`Order rejected: Outside trading period.`);
-      return { status: 'rejected', reason: 'Outside trading period' };
+    if (!req.organization) {
+      console.log(`Order rejected:  fields.`);
+      return { status: 'rejected', reason: 'Missing required fields' };
     }
 
-    if (!req.qty || !req.price) {
+    if (!req.qty || !req.price || !req.organization) {
       console.log(`Order rejected: Missing required fields.`);
       return { status: 'rejected', reason: 'Missing required fields' };
     }
@@ -115,13 +116,20 @@ class OrderManagement {
     return { status: 'queued', orderId: req.orderId };
   }
 
-  onDataResponse(response) {
+  async onDataResponse(response) {
     const sentTime = this.sentOrders.get(response.orderId);
     if (sentTime) {
       const latency = Date.now() - sentTime;
       console.log(
         `Order ${response.orderId} ${response.responseType}, Latency: ${latency}ms`
       );
+
+      await OrderResponse.create({
+        orderId: response.orderId,
+        response: response.type,
+        roundTripLatency: latency,
+      });
+
       this.sentOrders.delete(response.orderId);
     } else {
       console.log(`Unknown response for order ${response.orderId}`);

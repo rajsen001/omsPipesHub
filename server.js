@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -8,6 +9,17 @@ process.on('uncaughtException', (err) => {
 });
 
 import app from './app.js';
+
+console.log(process.env.DATABASE);
+
+mongoose
+  .connect(process.env.DATABASE)
+  .then((con) => {
+    console.log('DB connection successful!');
+  })
+  .catch((err) => {
+    console.log(err);
+  });
 
 const port = process.env.PORT || 3000;
 const server = app.listen(port, () => {
