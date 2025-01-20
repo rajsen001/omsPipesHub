@@ -56,7 +56,7 @@ class OrderManagement {
       } else {
         console.log('Orders remaining:', this.ordersQueue);
       }
-    }, 1000 * 60);
+    }, 1000);
   }
 
   onDataOrder(req) {
