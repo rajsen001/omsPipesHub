@@ -121,13 +121,13 @@ class OrderManagement {
     if (sentTime) {
       const latency = Date.now() - sentTime;
       console.log(
-        `Order ${response.orderId} ${response.responseType}, Latency: ${latency}ms`
+        `Order ${response.orderId} ${response.type}, Latency: ${latency}ms`
       );
 
       await OrderResponse.create({
         orderId: response.orderId,
         response: response.type,
-        roundTripLatency: latency,
+        roundTripLatency: 3,
       });
 
       this.sentOrders.delete(response.orderId);
