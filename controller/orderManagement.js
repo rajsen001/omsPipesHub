@@ -1,105 +1,147 @@
-
-
+import { v4 as uuidv4 } from 'uuid';
 class OrderManagement {
-    constructor(config) {
-        this.sentOrders = new Map();
+  constructor(config = {}) {
+    this.ordersQueue = [];
+    this.ordersMap = new Map();
+    this.sentOrders = new Map();
+    this.isTradingPeriod = false;
+    this.maxOrdersPerSecond = config.maxOrdersPerSecond || 100;
+    this.tradingHours = config.tradingHours || { start: '10:00', end: '21:00' };
+    this.initTradingPeriodChecker();
+    this.startOrderProcessor();
+  }
+
+  initTradingPeriodChecker() {
+    setInterval(() => {
+      const now = new Date();
+      const currentTime = `${now.getHours()}:${String(
+        now.getMinutes()
+      ).padStart(2, '0')}`;
+      if (
+        currentTime >= this.tradingHours.start &&
+        currentTime <= this.tradingHours.end &&
+        !this.isTradingPeriod
+      ) {
+        this.isTradingPeriod = true;
+        this.sendLogon();
+      } else if (currentTime > this.tradingHours.end && this.isTradingPeriod) {
         this.isTradingPeriod = false;
-        this.maxOrdersPerSecond = config.maxOrdersPerSecond || 100;
-        this.tradingHours = config.tradingHours || { start: '10:00', end: '13:00' };
-        this.kafkaProducer = config.kafkaProducer;
-        this.kafkaConsumer = config.kafkaConsumer;
+        this.sendLogout();
+      }
+    }, 1000);
+  }
 
-        this.initTradingPeriodChecker();
-        this.startOrderProcessor();
-    }
+  startOrderProcessor() {
+    setInterval(() => {
+      if (!this.isTradingPeriod) return;
 
-    initTradingPeriodChecker() {
-        setInterval(() => {
-            const now = new Date();
-            const currentTime = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
-            if (currentTime === this.tradingHours.start && !this.isTradingPeriod) {
-                this.isTradingPeriod = true;
-                this.sendLogon();
-            } else if (currentTime === this.tradingHours.end && this.isTradingPeriod) {
-                this.isTradingPeriod = false;
-                this.sendLogout();
-            }
-        }, 1000);
-    }
-
-    async startOrderProcessor() {
-        let orderCount = 0;
-        const interval = setInterval(() => {
-            // Resetting
-            orderCount = 0; 
-        }, 1000);
-
-        this.kafkaConsumer.run({
-            eachMessage: async ({ message }) => {
-                if (!this.isTradingPeriod) return;
-
-                if (orderCount < this.maxOrdersPerSecond) {
-                    const order = JSON.parse(message.value.toString());
-                    await this.send(order);
-                    this.sentOrders.set(order.m_orderId, Date.now());
-                    orderCount++;
-                } else {
-                    console.log('Throttling: Too many orders, skipping this message for now.');
-                }
-            }
-        });
-
-        process.on('SIGINT', async () => {
-            clearInterval(interval);
-            await this.kafkaConsumer.disconnect();
-        });
-    }
-
-    /**
-     * @description This method is called when an order is received from the client.
-     * @param {Object} request - The order request object.
-     */
-    async onDataOrder(request) {
-        if (!this.isTradingPeriod) {
-            return { status: 'rejected', reason: 'Outside trading period' };
+      console.log('Processing orders...');
+      let ordersToSend = this.ordersQueue.splice(0, this.maxOrdersPerSecond);
+      for (const orderId of ordersToSend) {
+        if (!this.ordersMap.has(orderId)) {
+          console.log(`Order ${orderId} not found.`);
+          continue;
         }
 
-        await this.kafkaProducer.send({
-            topic: 'order-requests',
-            messages: [{ key: String(request.m_orderId), value: JSON.stringify(request) }]
-        });
+        this.send(this.ordersMap.get(orderId));
+        this.sentOrders.set(orderId, Date.now());
 
-        return { status: 'queued', orderId: request.m_orderId };
+        this.ordersMap.delete(orderId);
+      }
+
+      if (this.ordersQueue.length == 0) {
+        console.log('No more orders to process.');
+      } else {
+        console.log('Orders remaining:', this.ordersQueue);
+      }
+    }, 1000 * 60);
+  }
+
+  onDataOrder(req) {
+    if (!this.isTradingPeriod) {
+      console.log(`Order rejected: Outside trading period.`);
+      return { status: 'rejected', reason: 'Outside trading period' };
     }
 
-    /**
-     * @description This method is called when a response is received from the exchange.
-     * @param {Object} response - The response object.
-     */
-    onDataResponse(response) {
-        const sentTime = this.sentOrders.get(response.m_orderId);
+    if (!req.qty || !req.price) {
+      console.log(`Order rejected: Missing required fields.`);
+      return { status: 'rejected', reason: 'Missing required fields' };
+    }
 
-        if (sentTime) {
-            const latency = Date.now() - sentTime;
-            console.log(`Response for Order ${response.m_orderId}: ${response.responseType}, Latency: ${latency}ms`);
-            this.sentOrders.delete(response.m_orderId);
-            return { status: 'processed', orderId: response.m_orderId, latency };
-        } else {
-            return { status: 'not_found', reason: 'Order not found' };
+    if (req.orderId && !req.orderType && this.ordersMap.has(req.orderId)) {
+      console.log(`Order rejected: Duplicate order.`);
+      return { status: 'rejected', reason: 'Duplicate order' };
+    }
+
+    req.orderType = req.orderType || 'New';
+
+    if (req.orderType != 'New' && req.orderId == null) {
+      console.log(`Order rejected: Missing required fields.`);
+      return { status: 'rejected', reason: 'Missing required fields' };
+    } else {
+      const orderId = req.orderId || uuidv4();
+      req.orderId = orderId;
+    }
+
+    switch (req.orderType) {
+      case 'New':
+        this.ordersQueue.push(req.orderId);
+        this.ordersMap.set(req.orderId, req);
+        break;
+
+      case 'Modify':
+        if (!this.ordersMap.has(req.orderId)) {
+          console.log(`Order ${req.orderId} not found.`);
+          return { status: 'rejected', reason: 'Order not found' };
         }
+        this.ordersMap[req.orderId] = req;
+        break;
+
+      case 'Cancel':
+        if (!this.ordersMap.has(req.orderId)) {
+          console.log(`Order ${req.orderId} not found.`);
+          return { status: 'rejected', reason: 'Order not found' };
+        }
+        this.ordersMap.delete(req.orderId);
+        break;
+
+      default:
+        console.log(`Unknown req type for order ${req.orderId}`);
     }
 
-    async send(order) {
-        console.log(`Sending order to exchange: ${order.m_orderId}`);
-    }
+    console.log(`Order ${req.orderId} queued.`, this.ordersQueue);
+    console.log(`Orders Map:`, this.ordersMap);
 
-    async sendLogon() {
-        console.log('Sending logon to exchange.');
-    }
+    return { status: 'queued', orderId: req.orderId };
+  }
 
-    async sendLogout() {
-        console.log('Sending logout to exchange.');
+  onDataResponse(response) {
+    const sentTime = this.sentOrders.get(response.orderId);
+    if (sentTime) {
+      const latency = Date.now() - sentTime;
+      console.log(
+        `Order ${response.orderId} ${response.responseType}, Latency: ${latency}ms`
+      );
+      this.sentOrders.delete(response.orderId);
+    } else {
+      console.log(`Unknown response for order ${response.orderId}`);
     }
+  }
+
+  send(order) {
+    console.log(`Sending order ${order.orderId} to exchange`);
+    // Simulate sending to exchange
+  }
+
+  sendLogon() {
+    console.log('Sending logon to exchange');
+    // Simulate sending logon
+  }
+
+  sendLogout() {
+    console.log('Sending logout to exchange');
+    // Simulate sending logout
+  }
 }
 
 export default OrderManagement;
