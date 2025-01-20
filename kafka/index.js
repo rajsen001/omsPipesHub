@@ -32,7 +32,7 @@ class KafkaService {
     async createConsumer() {
         this.consumer = this.kafka.consumer({ groupId: "default" });
         await this.consumer.connect();
-        await this.consumer.subscribe({ topic: "MESSAGES", fromBeginning: true });
+        await this.consumer.subscribe({ topic: "order-requests", fromBeginning: true });
         return this.consumer;
     }
 
