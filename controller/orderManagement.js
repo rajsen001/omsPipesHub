@@ -60,6 +60,11 @@ class OrderManagement {
   }
 
   onDataOrder(req) {
+    if (!this.isTradingPeriod) {
+      console.log(`Order rejected: Trading period is closed.`);
+      return new AppError('Trading period is closed', 400);
+    }
+
     if (!req.qty || !req.price || !req.organization) {
       console.log(`Order rejected: Missing required fields.`);
       return new AppError(
