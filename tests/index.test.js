@@ -46,7 +46,7 @@ describe('OMS API', () => {
     it('should accept the orderResponse', async () => {
       const mockOrderResponse = new OrderResponse({
         orderId: '123',
-        resposeType: 'sold',
+        responseType: 'sold',
         roundTripLatency: 3, // Just to make sure it's not undefined, becoz it will be calculated in the controller
       });
 
