@@ -1,6 +1,15 @@
 import OrderManagement from './orderManagement.js';
 import catchAsync from '../utils/catchAsync.js';
-const orderManagement = new OrderManagement();
+import { config } from 'dotenv';
+config();
+
+const orderManagement = new OrderManagement({
+  tradingHours: {
+    start: process.env.START_TRADING_HOUR,
+    end: process.env.END_TRADING_HOUR,
+  },
+});
+
 orderManagement.startOrderProcessor();
 
 const handleOrderRequest = (req, res) => {
