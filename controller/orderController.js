@@ -10,8 +10,6 @@ const orderManagement = new OrderManagement({
   },
 });
 
-orderManagement.startOrderProcessor();
-
 const handleOrderRequest = (req, res) => {
   const result = orderManagement.onDataOrder(req.body);
 
